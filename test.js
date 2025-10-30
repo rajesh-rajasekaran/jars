@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Folder Excel Merger (First Sheet + CSV Export)</title>
+  <title>Excel Merger with Progress & Color by File</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
@@ -11,7 +11,7 @@
       --c5:#fce4ec; --c6:#e0f7fa; --c7:#f1f8e9; --c8:#fff8e1; --c9:#e1f5fe;
     }
     body {font-family:Arial,Helvetica,sans-serif;background:#f0f4f8;color:#2c3e50;margin:0}
-    .container {max-width:1300px;margin:30px auto;background:#fff;border-radius:12px;
+    .container {max-width:1350px;margin:30px auto;background:#fff;border-radius:12px;
                 box-shadow:0 8px 25px rgba(0,0,0,.1);overflow:hidden}
     header {background:#2c3e50;color:#fff;padding:20px;text-align:center}
     h1 {margin:0;font-size:1.8rem}
@@ -26,6 +26,9 @@
     .btn-export {background:#3498db;color:#fff}
     .btn-export:hover {background:#2980b9}
     .btn-export:disabled {background:#95a5a6;cursor:not-allowed}
+    .progress-container {margin:15px 20px 0;background:#e0e0e0;border-radius:6px;overflow:hidden;height:10px}
+    .progress-bar {height:100%;background:#27ae60;width:0;transition:width .3s ease}
+    .progress-text {margin:8px 20px 15px;font-size:0.9rem;color:#555}
     .search {padding:15px 20px;background:#f8f9fa;border-bottom:1px solid #dee2e6}
     .search input {width:100%;padding:12px;border:1px solid #ced4da;border-radius:8px;font-size:1rem}
     .summary {padding:0 20px 15px;font-weight:bold;color:#2980b9;font-size:1.1rem}
@@ -37,7 +40,6 @@
     table {width:100%;border-collapse:collapse;font-size:.95rem}
     th, td {border:1px solid #dee2e6;padding:10px;text-align:left}
     th {background:#2c3e50;color:#fff;position:sticky;top:0;z-index:10}
-    tr:nth-child(even) td {background:#f9f9fb}
     .no-data {text-align:center;color:#7f8c8d;font-style:italic;padding:40px;font-size:1.1rem}
   </style>
 </head>
@@ -45,7 +47,7 @@
   <div class="container">
     <header>
       <h1>Excel Folder Merger</h1>
-      <p class="subtitle">Pick folder → First sheet only → Row 1 = headers → Export filtered CSV</p>
+      <p class="subtitle">Pick folder → First sheet only → Row 1 = headers → Color by file</p>
     </header>
 
     <div class="controls">
@@ -53,6 +55,11 @@
       <button id="clearAll" class="btn-clear">Clear All</button>
       <button id="exportCsv" class="btn-export" disabled>Export CSV</button>
     </div>
+
+    <div id="progressContainer" class="progress-container" style="display:none">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+    <div id="progressText" class="progress-text"></div>
 
     <div class="search">
       <input id="searchBox" placeholder="Search across all data..." />
@@ -68,7 +75,7 @@
 
   <script>
     // Core data
-    let merged = [];           // [{row: {col1: val, ...}, file, sheet}]
+    let merged = [];           // [{row: {col: val}, file, sheet}]
     let filtered = [];
     const fileColor = {};
     const colors = ['var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c5)',
@@ -82,57 +89,76 @@
     const outDiv = document.getElementById('output');
     const sumDiv = document.getElementById('summary');
     const legDiv = document.getElementById('legend');
+    const progCont = document.getElementById('progressContainer');
+    const progBar = document.getElementById('progressBar');
+    const progText = document.getElementById('progressText');
+
+    // Show progress
+    function showProgress(text, percent) {
+      progCont.style.display = 'block';
+      progText.textContent = text;
+      progBar.style.width = percent + '%';
+    }
+
+    function hideProgress() {
+      progCont.style.display = 'none';
+      progText.textContent = '';
+      progBar.style.width = '0%';
+    }
 
     // Pick folder
     pickBtn.onclick = async () => {
       try {
         const dirHandle = await window.showDirectoryPicker();
-        const promises = [];
-
+        const entries = [];
         for await (const entry of dirHandle.values()) {
-          if (entry.kind !== 'file') continue;
-          const name = entry.name.toLowerCase();
-          if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) continue;
-
-          promises.push((async () => {
-            const file = await entry.getFile();
-            const data = await file.arrayBuffer();
-            const wb = XLSX.read(data, {type:'array'});
-            const firstSheet = wb.SheetNames[0];
-            const ws = wb.Sheets[firstSheet];
-            return {fileName: file.name, sheetName: firstSheet, ws};
-          })());
+          if (entry.kind === 'file' && /\.(xlsx|xls)$/i.test(entry.name)) {
+            entries.push(entry);
+          }
         }
 
-        const results = await Promise.all(promises);
-        if (!results.length) {
-          alert('No Excel files found.');
+        if (!entries.length) {
+          alert('No Excel files found in the selected folder.');
           return;
         }
 
         merged = [];
-        results.forEach(({fileName, sheetName, ws}) => {
-          if (!fileColor[fileName]) {
-            fileColor[fileName] = colors[Object.keys(fileColor).length % colors.length];
+        let processed = 0;
+        const total = entries.length;
+
+        for (const entry of entries) {
+          showProgress(`Reading ${entry.name}... (${processed + 1}/${total})`, (processed / total) * 100);
+
+          const file = await entry.getFile();
+          const data = await file.arrayBuffer();
+          const wb = XLSX.read(data, {type: 'array'});
+          const firstSheet = wb.SheetNames[0];
+          const ws = wb.Sheets[firstSheet];
+
+          if (!fileColor[file.name]) {
+            fileColor[file.name] = colors[Object.keys(fileColor).length % colors.length];
           }
 
           const json = XLSX.utils.sheet_to_json(ws, {header: 1, defval: ''});
-          if (json.length < 1) return;
+          if (json.length < 1) continue;
 
           const headers = json[0];
           json.slice(1).forEach(row => {
             const obj = {};
-            headers.forEach((h, i) => {
-              obj[h] = row[i] ?? '';
-            });
-            merged.push({row: obj, file: fileName, sheet: sheetName});
+            headers.forEach((h, i) => obj[h] = row[i] ?? '');
+            merged.push({row: obj, file: file.name, sheet: firstSheet});
           });
-        });
+
+          processed++;
+          showProgress(`Merging data... (${processed}/${total})`, (processed / total) * 100);
+        }
 
         filtered = [...merged];
+        hideProgress();
         renderAll();
         exportBtn.disabled = false;
       } catch (e) {
+        hideProgress();
         if (e.name !== 'AbortError') alert('Error: ' + e.message);
       }
     };
@@ -143,21 +169,35 @@
         merged = []; filtered = []; fileColor = {};
         renderAll();
         exportBtn.disabled = true;
+        hideProgress();
       }
     };
 
-    // Search
+    // Search (with progress for large datasets)
+    let searchTimeout;
     searchIn.oninput = () => {
+      clearTimeout(searchTimeout);
       const q = searchIn.value.trim().toLowerCase();
-      filtered = q
-        ? merged.filter(it => 
-            Object.values(it.row).some(v => v.toString().toLowerCase().includes(q)) ||
-            it.file.toLowerCase().includes(q) ||
-            it.sheet.toLowerCase().includes(q)
-          )
-        : [...merged];
-      renderTable();
-      updateSummary();
+
+      searchTimeout = setTimeout(() => {
+        if (q === '') {
+          filtered = [...merged];
+        } else {
+          showProgress('Filtering data...', 10);
+          setTimeout(() => {
+            filtered = merged.filter(it =>
+              Object.values(it.row).some(v => v.toString().toLowerCase().includes(q)) ||
+              it.file.toLowerCase().includes(q) ||
+              it.sheet.toLowerCase().includes(q)
+            );
+            hideProgress();
+            renderTable();
+            updateSummary();
+          }, 10);
+        }
+        renderTable();
+        updateSummary();
+      }, 300);
     };
 
     // Export CSV
@@ -178,7 +218,7 @@
       ];
 
       const csv = rows.map(r => r.map(v => `"${(v+'').replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], {type: 'text/csv'});
+      const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -218,7 +258,7 @@
 
       filtered.forEach(it => {
         const bg = fileColor[it.file] || '#fff';
-        html += `<tr style="background:${bg};">`;
+        html += `<tr style="background:${bg} !important;">`;
         html += `<td><strong>${esc(it.file)}</strong></td><td>${esc(it.sheet)}</td>`;
         headerList.slice(2).forEach(h => html += `<td>${esc(it.row[h] ?? '')}</td>`);
         html += `</tr>`;
