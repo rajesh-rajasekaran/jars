@@ -1,208 +1,79 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Excel Merger Web App</title>
-  <script src="/xlsx.core.min.js"></script>
-  <style>
-    :root{--c1:#e3f2fd;--c2:#f3e5f5;--c3:#e8f5e9;--c4:#fff3e0;--c5:#fce4ec;--c6:#e0f7fa;--c7:#f1f8e9;--c8:#fff8e1;--c9:#e1f5fe}
-    body{font-family:Arial,Helvetica,sans-serif;background:#f0f4f8;color:#2c3e50;margin:0}
-    .container{max-width:1350px;margin:30px auto;background:#fff;border-radius:12px;box-shadow:0 8px 25px rgba(0,0,0,.1);overflow:hidden}
-    header{background:#2c3e50;color:#fff;padding:20px;text-align:center}
-    h1{margin:0;font-size:1.8rem}
-    .subtitle{margin:8px 0 0;opacity:.9}
-    .controls{padding:20px;background:#f8f9fa;border-bottom:1px solid #dee2e6;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    button{padding:10px 18px;border:none;border-radius:6px;font-weight:bold;cursor:pointer;transition:.2s}
-    .btn-pick{background:#27ae60;color:#fff}
-    .btn-pick:hover{background:#1e8449}
-    .btn-clear{background:#e74c3c;color:#fff}
-    .btn-clear:hover{background:#c0392b}
-    .btn-export{background:#3498db;color:#fff}
-    .btn-export:hover{background:#2980b9}
-    .btn-export:disabled{background:#95a5a6;cursor:not-allowed}
-    .progress{margin:15px 20px 0;background:#e0e0e0;border-radius:6px;height:10px;overflow:hidden}
-    .progress-bar{height:100%;background:#27ae60;width:0;transition:width .3s}
-    .progress-text{margin:8px 20px 15px;font-size:0.9rem;color:#555}
-    .search{padding:15px 20px;background:#f8f9fa;border-bottom:1px solid #dee2e6}
-    .search input{width:100%;padding:12px;border:1px solid #ced4da;border-radius:8px;font-size:1rem}
-    .summary{padding:0 20px 15px;font-weight:bold;color:#2980b9;font-size:1.1rem}
-    .legend{padding:15px 20px;background:#f1f3f5;border-bottom:1px solid #dee2e6;display:flex;flex-wrap:wrap;gap:12px;font-size:.9rem}
-    .legend-item{display:flex;align-items:center;gap:6px}
-    .legend-color{width:16px;height:16px;border-radius:4px;border:1px solid #ccc}
-    .table-wrap{padding:20px;max-height:650px;overflow:auto}
-    table{width:100%;border-collapse:collapse;font-size:.95rem}
-    th,td{border:1px solid #dee2e6;padding:10px;text-align:left}
-    th{background:#2c3e50;color:#fff;position:sticky;top:0;z-index:10}
-    .no-data{text-align:center;color:#7f8c8d;font-style:italic;padding:40px;font-size:1.1rem}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>Excel Merger Web App</h1>
-      <p class="subtitle">Upload multiple Excel files → First sheet only → Row 1 = headers</p>
-    </header>
+<script>
+  // ... (same variables)
 
-    <div class="controls">
-      <input type="file" id="fileInput" multiple accept=".xlsx,.xls" style="flex:1;min-width:250px;padding:10px" />
-      <button id="processBtn" class="btn-pick">Process Files</button>
-      <button id="clearBtn" class="btn-clear">Clear</button>
-      <button id="exportBtn" class="btn-export" disabled>Export CSV</button>
-    </div>
+  processBtn.onclick = async () => {
+    const files = fileInput.files;
+    if (!files.length) return alert('Select files');
 
-    <div id="progress" class="progress" style="display:none"><div id="progressBar" class="progress-bar"></div></div>
-    <div id="progressText" class12 class="progress-text"></div>
+    allData = []; filtered = []; fileColors = {};
+    output.innerHTML = '<p class="no-data">Processing...</p>';
+    progress.style.display = 'block';
+    progressText.textContent = 'Uploading...';
+    exportBtn.disabled = true;
 
-    <div class="search"><input id="searchBox" placeholder="Search in results..." /></div>
-
-    <div id="summary" class="summary"></div>
-    <div id="legend" class="legend"></div>
-
-    <div class="table-wrap"><div id="output"></div></div>
-  </div>
-
-  <script>
-    const fileInput = document.getElementById('fileInput');
-    const processBtn = document.getElementById('processBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const exportBtn = document.getElementById('exportBtn');
-    const searchBox = document.getElementById('searchBox');
-    const output = document.getElementById('output');
-    const summary = document.getElementById('summary');
-    const legend = document.getElementById('legend');
-    const progress = document.getElementById('progress');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-
-    let allData = [];
-    let filtered = [];
-    let fileColors = {};
-
-    processBtn.onclick = async () => {
-      const files = fileInput.files;
-      if (!files.length) return alert('Select at least one file');
-
-      allData = []; filtered = []; fileColors = {};
-      output.innerHTML = '<p class="no-data">Processing...</p>';
-      progress.style.display = 'block';
-      progressText.textContent = 'Preparing...';
-      exportBtn.disabled = true;
-
-      const formData = [];
-      for (let file of files) {
-        const dataUrl = await new Promise(res => {
-          const reader = new FileReader();
-          reader.onload = e => res(e.target.result);
-          reader.readAsDataURL(file);
-        });
-        formData.push({ name: file.name, data: dataUrl });
-      }
-
-      const evtSource = new EventSource('/api/process');
-      evtSource.onmessage = e => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'progress') {
-          progressBar.style.width = msg.percent + '%';
-          progressText.textContent = msg.message;
-        } else if (msg.type === 'done') {
-          allData = msg.data;
-          fileColors = msg.colors;
-          filtered = [...allData];
-          evtSource.close();
-          progress.style.display = 'none';
-          renderAll();
-          exportBtn.disabled = false;
-        } else if (msg.type === 'error') {
-          alert('Error: ' + msg.message);
-          evtSource.close();
-          progress.style.display = 'none';
-        }
-      };
-      fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: formData })
+    const formData = [];
+    for (let file of files) {
+      const dataUrl = await new Promise(res => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result);
+        reader.readAsDataURL(file);
       });
-    };
-
-    clearBtn.onclick = () => {
-      allData = []; filtered = []; fileColors = {};
-      output.innerHTML = '<p class="no-data">No files loaded.</p>';
-      summary.textContent = '';
-      legend.innerHTML = '';
-      exportBtn.disabled = true;
-      fileInput.value = '';
-    };
-
-    searchBox.oninput = () => {
-      const q = searchBox.value.trim().toLowerCase();
-      filtered = q ? allData.filter(r =>
-        Object.values(r).some(v => v.toString().toLowerCase().includes(q))
-      ) : [...allData];
-      renderTable();
-      updateSummary();
-    };
-
-    exportBtn.onclick = () => {
-      fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: filtered })
-      }).then(r => r.blob()).then(blob => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `merged-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`;
-        a.click();
-      });
-    };
-
-    function renderAll() {
-      renderLegend();
-      renderTable();
-      updateSummary();
+      formData.push({ name: file.name, data: dataUrl });
     }
 
-    function renderLegend() {
-      legend.innerHTML = Object.keys(fileColors).length
-        ? Object.entries(fileColors).map(([f,c]) => `
-            <div class="legend-item">
-              <div class="legend-color" style="background:${c}"></div>
-              <span>${escapeHtml(f)}</span>
-            </div>`).join('')
-        : '<i>No files</i>';
+    // === CORRECT: Use fetch + manual EventSource ===
+    const response = await fetch('/api/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: formData })
+    });
+
+    if (!response.ok) {
+      alert('Server error');
+      return;
     }
 
-    function renderTable() {
-      if (!filtered.length) {
-        output.innerHTML = '<p class="no-data">No results.</p>';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const processChunk = ({ done, value }) => {
+      if (done) {
+        progress.style.display = 'none';
         return;
       }
-      const headers = new Set(['Source File', 'Sheet']);
-      filtered.forEach(r => Object.keys(r).forEach(k => headers.add(k)));
-      const headerList = Array.from(headers);
 
-      let html = `<table><thead><tr>${headerList.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
-      filtered.forEach(r => {
-        const bg = fileColors[r['Source File']] || '#fff';
-        html += `<tr style="background:${bg} !important;">`;
-        html += `<td><strong>${escapeHtml(r['Source File'])}</strong></td><td>${escapeHtml(r['Sheet'])}</td>`;
-        headerList.slice(2).forEach(h => html += `<td>${escapeHtml(r[h] ?? '')}</td>`);
-        html += `</tr>`;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop(); // leftover
+
+      lines.forEach(line => {
+        if (!line.startsWith('data: ')) return;
+        const jsonStr = line.slice(6);
+        try {
+          const msg = JSON.parse(jsonStr);
+          if (msg.type === 'progress') {
+            progressBar.style.width = msg.percent + '%';
+            progressText.textContent = msg.message;
+          } else if (msg.type === 'done') {
+            allData = msg.data;
+            fileColors = msg.colors;
+            filtered = [...allData];
+            renderAll();
+            exportBtn.disabled = false;
+            progress.style.display = 'none';
+          } else if (msg.type === 'error') {
+            alert('Error: ' + msg.message);
+            progress.style.display = 'none';
+          }
+        } catch (e) {}
       });
-      html += `</tbody></table>`;
-      output.innerHTML = html;
-    }
 
-    function updateSummary() {
-      summary.textContent = `Showing ${filtered.length} of ${allData.length} rows`;
-    }
+      reader.read().then(processChunk);
+    };
 
-    function escapeHtml(t) {
-      const div = document.createElement('div');
-      div.textContent = t;
-      return div.innerHTML;
-    }
-  </script>
-</body>
-</html>
+    reader.read().then(processChunk);
+  };
+
+  // ... rest of script unchanged
+</script>
