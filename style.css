@@ -1,0 +1,17 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.5 system-ui;background:#f9f9fb;color:#222;padding:20px}
+h1{margin-bottom:15px;text-align:center}
+.controls{display:flex;gap:8px;margin:15px 0;flex-wrap:wrap}
+#search{padding:8px;flex:1;min-width:180px;border:1px solid #ccc;border-radius:4px}
+button{padding:8px 14px;background:#0069d9;color:#fff;border:none;border-radius:4px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+.table-wrap{max-height:65vh;overflow:auto;border:1px solid #ddd;border-radius:4px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:6px 10px;border-bottom:1px solid #eee;text-align:left}
+th{background:#f5f5f5;position:sticky;top:0}
+tr:hover{background:#f0f8ff}
+.paging{text-align:center;margin:15px 0}
+.paging button{margin:0 3px}
+.paging button.active{background:#0069d9;color:#fff}
+.sumgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:20px 0}
+.card{background:#fff;padding:10px;border:1px solid #eee;border-radius:4px;font-size:13px}
