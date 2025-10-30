@@ -1,16 +1,10 @@
 #!/usr/bin/env node
-// server.js - Fixed HTTP Excel Merger (SSE + fetch working)
+// server.js - HTTP Excel Merger (CDN SheetJS)
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
-
-// === BUNDLED SheetJS ===
-const XLSX = (function() {
-  const script = fs.readFileSync(path.join(__dirname, 'xlsx.core.min.js'), 'utf8');
-  return eval(script);
-})();
 
 // === CONFIG ===
 const PORT = 3000;
@@ -29,23 +23,14 @@ function sendFile(res, filePath, contentType = 'text/html') {
   });
 }
 
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  })[m]);
-}
-
 // === SERVER ===
 const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname;
 
-  // === Serve static files ===
+  // Serve index
   if (pathname === '/' || pathname === '/index.html') {
     return sendFile(res, path.join(PUBLIC_DIR, 'index.html'));
-  }
-  if (pathname === '/xlsx.core.min.js') {
-    return sendFile(res, path.join(__dirname, 'xlsx.core.min.js'), 'application/javascript');
   }
 
   // === API: /api/process (SSE) ===
@@ -55,7 +40,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { files } = JSON.parse(body);
-        if (!Array.isArray(files)) throw new Error('Invalid files array');
+        if (!Array.isArray(files)) throw new Error('Invalid files');
 
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -73,13 +58,14 @@ const server = http.createServer((req, res) => {
           res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
         };
 
-        // Process each file
         (async () => {
           for (const fileObj of files) {
             processed++;
-            send('progress', { message: `Reading ${fileObj.name}...`, percent: (processed / files.length) * 100 });
+            send('progress', {
+              message: `Reading ${fileObj.name}...`,
+              percent: (processed / files.length) * 100
+            });
 
-            // Decode base64
             const base64 = fileObj.data.split(',')[1];
             const buffer = Buffer.from(base64, 'base64');
             const workbook = XLSX.read(buffer, { type: 'buffer' });
@@ -137,7 +123,7 @@ const server = http.createServer((req, res) => {
         res.end('\uFEFF' + csv);
       } catch (err) {
         res.writeHead(500);
-        res.end('Export failed: ' + err.message);
+        res.end('Export failed');
       }
     });
     return;
