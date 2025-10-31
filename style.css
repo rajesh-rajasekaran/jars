@@ -1,8 +1,13 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font:14px/1.5 system-ui;background:#f9f9fb;color:#222;padding:20px}
-h1{margin-bottom:15px;text-align:center}
+h1{margin-bottom:15px;text-align:center;color:#2c3e50}
+.upload-box{background:#e3f2fd;padding:15px;border-radius:8px;margin-bottom:20px;border:1px solid #bbd8ff}
+.upload-box h3{margin:0 0 10px;color:#0056b3}
+.upload-box input,.upload-box button{padding:8px;margin:5px 0}
+.upload-box button{background:#0069d9;color:white;border:none;border-radius:4px;cursor:pointer}
+#upmsg,#dirmsg{margin-left:10px;font-weight:bold}
 .controls{display:flex;gap:8px;margin:15px 0;flex-wrap:wrap}
-#search{padding:8px;flex:1;min-width:180px;border:1px solid #ccc;border-radius:4px}
+#search{flex:1;min-width:180px;padding:8px;border:1px solid #ccc;border-radius:4px}
 button{padding:8px 14px;background:#0069d9;color:#fff;border:none;border-radius:4px;cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
 .table-wrap{max-height:65vh;overflow:auto;border:1px solid #ddd;border-radius:4px}
